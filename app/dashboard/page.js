@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import AdminLayout from '../../components/AdminLayout_mobile'
+import AdminLayout from '../../components/AdminLayout'
 import { useAuth } from '../../context/AuthContext'
 
 const STATUS_COLOR = {
