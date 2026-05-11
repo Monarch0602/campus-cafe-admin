@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import AdminLayout from '../../components/AdminLayout'
+import AdminLayout from '../../components/AdminLayout_mobile'
 
 export default function Production() {
     const [productionData, setProductionData] = useState([])

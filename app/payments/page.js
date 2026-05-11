@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import AdminLayout from '../../components/AdminLayout'
+import AdminLayout from '../../components/AdminLayout_mobile'
 
 export default function Payments() {
     const [orders, setOrders] = useState([])
@@ -85,8 +85,8 @@ export default function Payments() {
                                     <div className="text-xs text-gray-400">Incl. GST</div>
                                 </div>
                                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${order.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                                        order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                                            'bg-yellow-100 text-yellow-700'}`}>
+                                    order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                        'bg-yellow-100 text-yellow-700'}`}>
                                     {order.status?.replace(/_/g, ' ')}
                                 </span>
                             </div>
