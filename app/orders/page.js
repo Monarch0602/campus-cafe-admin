@@ -31,33 +31,47 @@ export default function Orders() {
     async function fetchOrders() {
         setLoading(true)
 
-        // Fetch orders with all related data including student info
-        const { data } = await supabase
+        // Get all orders first WITHOUT the FK join
+        const { data: ordersData, error } = await supabase
             .from('orders')
-            .select(`
-        *,
-        order_items(quantity, unit_price, menu_items(name, category)),
-        profiles!orders_user_id_fkey(full_name, phone, role)
-      `)
+            .select('*, order_items(quantity, unit_price, menu_items(name, category))')
             .order('created_at', { ascending: false })
 
-        if (data) {
-            // For each parent order, fetch their child info
-            const enrichedOrders = await Promise.all(data.map(async (order) => {
-                const role = order.notes?.match(/Role: (\w+)/)?.[1] || 'parent'
-                let childInfo = null
-                if (role === 'parent' && order.user_id) {
-                    const { data: children } = await supabase
-                        .from('children')
-                        .select('*')
-                        .eq('parent_id', order.user_id)
-                        .limit(1)
-                    if (children && children.length > 0) childInfo = children[0]
-                }
-                return { ...order, role, childInfo }
-            }))
-            setOrders(enrichedOrders)
+        if (error) {
+            console.log('Orders error:', error.message)
+            setLoading(false)
+            return
         }
+
+        if (!ordersData) { setLoading(false); return }
+
+        // Fetch profiles and children separately, then merge in JS
+        const userIds = [...new Set(ordersData.map(o => o.user_id).filter(Boolean))]
+
+        const [profilesResult, childrenResult] = await Promise.all([
+            supabase.from('profiles').select('id, full_name, phone, role').in('id', userIds),
+            supabase.from('children').select('*').in('parent_id', userIds),
+        ])
+
+        const profilesMap = {}
+        const childrenMap = {}
+        profilesResult.data?.forEach(p => { profilesMap[p.id] = p })
+        childrenResult.data?.forEach(c => {
+            if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = c
+        })
+
+        // Enrich orders
+        const enriched = ordersData.map(order => {
+            const role = order.notes?.match(/Role: (\w+)/)?.[1] || 'parent'
+            return {
+                ...order,
+                role,
+                profiles: profilesMap[order.user_id] || null,
+                childInfo: role === 'parent' ? (childrenMap[order.user_id] || null) : null,
+            }
+        })
+
+        setOrders(enriched)
         setLoading(false)
     }
 
@@ -75,7 +89,6 @@ export default function Orders() {
         const match = notes.match(/Roll: (\S+)/)
         return match ? match[1] : null
     }
-
     function parseBoard(notes) {
         if (!notes) return null
         const match = notes.match(/Board: (\w+)/)
@@ -132,7 +145,7 @@ export default function Orders() {
                             return (
                                 <div key={order.id} className="px-4 md:px-6 py-4">
                                     <div className="flex items-start gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                 <span className="text-xs font-mono text-gray-400">#{order.id.slice(0, 8).toUpperCase()}</span>
                                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[order.status] || 'bg-gray-100 text-gray-600'}`}>
@@ -146,7 +159,6 @@ export default function Orders() {
                                                 </span>
                                             </div>
 
-                                            {/* Student / Customer name highlighted */}
                                             <div className="text-sm font-semibold text-gray-900 mb-1">
                                                 {order.role === 'parent' && order.childInfo?.full_name
                                                     ? <span>👤 {order.childInfo.full_name} <span className="text-gray-400 font-normal">(ordered by {order.profiles?.full_name || 'Parent'})</span></span>
@@ -154,7 +166,6 @@ export default function Orders() {
                                                 }
                                             </div>
 
-                                            {/* Quick info badges for collection verification */}
                                             {order.role === 'parent' && order.childInfo && (
                                                 <div className="flex items-center gap-3 text-xs text-gray-600 mb-2 flex-wrap">
                                                     {order.childInfo.class && <span>🏫 {order.childInfo.class}</span>}
@@ -194,62 +205,30 @@ export default function Orders() {
                                         </div>
                                     </div>
 
-                                    {/* Expanded — student verification details */}
                                     {isExpanded && (
-                                        <div className="mt-4 ml-0 md:ml-0 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <span className="text-base">🪪</span>
                                                 <h4 className="text-sm font-semibold text-blue-900">Collection Verification</h4>
                                             </div>
-
                                             {order.role === 'parent' && order.childInfo ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student Name</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.childInfo.full_name}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class / Grade</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.childInfo.class || 'Not set'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div>
-                                                        <div className="text-sm font-medium text-gray-900">{rollNumber || 'Not set'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Education Board</div>
-                                                        <div className="text-sm font-medium text-gray-900">{board || 'Not set'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Contact</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div>
-                                                    </div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student Name</div><div className="text-sm font-medium text-gray-900">{order.childInfo.full_name}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class / Grade</div><div className="text-sm font-medium text-gray-900">{order.childInfo.class || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div><div className="text-sm font-medium text-gray-900">{rollNumber || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Education Board</div><div className="text-sm font-medium text-gray-900">{board || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Contact</div><div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div><div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div></div>
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div>
-                                                        <div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Role</div>
-                                                        <div className="text-sm font-medium text-gray-900 capitalize">{order.role}</div>
-                                                    </div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Role</div><div className="text-sm font-medium text-gray-900 capitalize">{order.role}</div></div>
                                                 </div>
                                             )}
-
                                             <div className="mt-3 pt-3 border-t border-blue-200">
-                                                <p className="text-xs text-blue-800">
-                                                    ⚠️ Verify the student's ID card matches these details before handing over the order.
-                                                </p>
+                                                <p className="text-xs text-blue-800">⚠️ Verify the student's ID card matches these details before handing over the order.</p>
                                             </div>
                                         </div>
                                     )}

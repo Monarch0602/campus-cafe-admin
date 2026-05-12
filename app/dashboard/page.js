@@ -36,33 +36,47 @@ export default function Dashboard() {
         setLoading(true)
         let query = supabase
             .from('orders')
-            .select(`*, order_items(quantity, unit_price, menu_items(name, category)), profiles!orders_user_id_fkey(full_name, phone, role)`)
+            .select('*, order_items(quantity, unit_price, menu_items(name, category))')
             .order('created_at', { ascending: false })
 
         if (viewMode === 'today') query = query.eq('delivery_date', getToday())
         if (viewMode === 'tomorrow') query = query.eq('delivery_date', getTomorrow())
 
-        const { data } = await query
+        const { data: ordersData } = await query
 
-        if (data) {
-            const enriched = await Promise.all(data.map(async (order) => {
-                const role = order.notes?.match(/Role: (\w+)/)?.[1] || 'parent'
-                let childInfo = null
-                if (role === 'parent' && order.user_id) {
-                    const { data: children } = await supabase
-                        .from('children').select('*').eq('parent_id', order.user_id).limit(1)
-                    if (children && children.length > 0) childInfo = children[0]
-                }
-                return { ...order, role, childInfo }
-            }))
-            setOrders(enriched)
-            setStats({
-                total: enriched.length,
-                revenue: enriched.reduce((s, o) => s + Number(o.total_amount), 0),
-                pending: enriched.filter(o => ['pending', 'confirmed', 'preparing'].includes(o.status)).length,
-                collected: enriched.filter(o => o.status === 'delivered').length,
-            })
-        }
+        if (!ordersData) { setLoading(false); return }
+
+        const userIds = [...new Set(ordersData.map(o => o.user_id).filter(Boolean))]
+
+        const [profilesResult, childrenResult] = await Promise.all([
+            supabase.from('profiles').select('id, full_name, phone, role').in('id', userIds),
+            supabase.from('children').select('*').in('parent_id', userIds),
+        ])
+
+        const profilesMap = {}
+        const childrenMap = {}
+        profilesResult.data?.forEach(p => { profilesMap[p.id] = p })
+        childrenResult.data?.forEach(c => {
+            if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = c
+        })
+
+        const enriched = ordersData.map(order => {
+            const role = order.notes?.match(/Role: (\w+)/)?.[1] || 'parent'
+            return {
+                ...order,
+                role,
+                profiles: profilesMap[order.user_id] || null,
+                childInfo: role === 'parent' ? (childrenMap[order.user_id] || null) : null,
+            }
+        })
+
+        setOrders(enriched)
+        setStats({
+            total: enriched.length,
+            revenue: enriched.reduce((s, o) => s + Number(o.total_amount), 0),
+            pending: enriched.filter(o => ['pending', 'confirmed', 'preparing'].includes(o.status)).length,
+            collected: enriched.filter(o => o.status === 'delivered').length,
+        })
         setLoading(false)
     }
 
@@ -73,12 +87,8 @@ export default function Dashboard() {
 
     const filtered = slot === 'all' ? orders : orders.filter(o => o.notes?.includes(`Collection: ${slot}`))
 
-    function parseRollNumber(notes) {
-        const m = notes?.match(/Roll: (\S+)/); return m ? m[1] : null
-    }
-    function parseBoard(notes) {
-        const m = notes?.match(/Board: (\w+)/); return m ? m[1] : null
-    }
+    function parseRollNumber(notes) { const m = notes?.match(/Roll: (\S+)/); return m ? m[1] : null }
+    function parseBoard(notes) { const m = notes?.match(/Board: (\w+)/); return m ? m[1] : null }
 
     return (
         <AdminLayout>
@@ -227,7 +237,6 @@ export default function Dashboard() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium">{order.profiles?.full_name || 'N/A'}</div></div>
                                                     <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium">{order.profiles?.phone || 'N/A'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Role</div><div className="text-sm font-medium capitalize">{order.role}</div></div>
                                                 </div>
                                             )}
                                             <div className="mt-3 pt-3 border-t border-blue-200">
