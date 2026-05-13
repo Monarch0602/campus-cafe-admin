@@ -76,8 +76,51 @@ export default function Orders() {
     }
 
     async function updateStatus(id, status) {
+        // Get the order to know who to notify
+        const order = orders.find(o => o.id === id)
+
         await supabase.from('orders').update({ status }).eq('id', id)
-        fetchOrders()
+
+        // Send notification to user based on new status
+        if (order?.user_id) {
+            const shortId = id.slice(0, 8).toUpperCase()
+            const messages = {
+                confirmed: {
+                    title: '✅ Order Confirmed',
+                    body: `Your order #${shortId} has been confirmed and will be prepared soon.`,
+                    type: 'order_confirmed'
+                },
+                preparing: {
+                    title: '👨‍🍳 Being Prepared',
+                    body: `Your order #${shortId} is being freshly prepared in the kitchen.`,
+                    type: 'order_prepared'
+                },
+                delivered: {
+                    title: '✓ Order Collected!',
+                    body: `Order #${shortId} has been collected. Thank you for choosing Campus Cafe!`,
+                    type: 'order_collected'
+                },
+                cancelled: {
+                    title: '❌ Order Cancelled',
+                    body: `Your order #${shortId} has been cancelled. Please contact Campus Cafe for details.`,
+                    type: 'general'
+                },
+            }
+
+            const msg = messages[status]
+            if (msg) {
+                await supabase.from('notifications').insert({
+                    user_id: order.user_id,
+                    title: msg.title,
+                    body: msg.body,
+                    type: msg.type,
+                    order_id: id,
+                    is_read: false,
+                })
+            }
+        }
+
+        fetchData()
     }
 
     let filtered = orders
