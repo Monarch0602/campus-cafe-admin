@@ -192,29 +192,29 @@ export default function MenuManager() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Name *</label>
-                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Item name"
+                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" placeholder="Item name"
                                 value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                         </div>
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Price (₹) *</label>
-                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="150" type="number"
+                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" placeholder="150" type="number"
                                 value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} />
                         </div>
                         <div className="md:col-span-2">
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Description</label>
-                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="What's in it?"
+                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" placeholder="What's in it?"
                                 value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                         </div>
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Category</label>
-                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
                                 value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Plan Type</label>
-                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
                                 value={form.plan_type} onChange={e => setForm({ ...form, plan_type: e.target.value })}>
                                 <option value="both">Both (Lunch & Snack)</option>
                                 <option value="lunch">Lunch only</option>
