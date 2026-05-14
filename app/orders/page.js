@@ -31,23 +31,16 @@ export default function Orders() {
     async function fetchOrders() {
         setLoading(true)
 
-        // Get all orders first WITHOUT the FK join
         const { data: ordersData, error } = await supabase
             .from('orders')
             .select('*, order_items(quantity, unit_price, menu_items(name, category))')
             .order('created_at', { ascending: false })
 
-        if (error) {
-            console.log('Orders error:', error.message)
-            setLoading(false)
-            return
-        }
+        if (error || !ordersData) { setLoading(false); return }
 
-        if (!ordersData) { setLoading(false); return }
-
-        // Fetch profiles and children separately, then merge in JS
         const userIds = [...new Set(ordersData.map(o => o.user_id).filter(Boolean))]
 
+        // Run profiles and children queries in parallel
         const [profilesResult, childrenResult] = await Promise.all([
             supabase.from('profiles').select('id, full_name, phone, role').in('id', userIds),
             supabase.from('children').select('*').in('parent_id', userIds),
@@ -60,7 +53,6 @@ export default function Orders() {
             if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = c
         })
 
-        // Enrich orders
         const enriched = ordersData.map(order => {
             const role = order.notes?.match(/Role: (\w+)/)?.[1] || 'parent'
             return {
