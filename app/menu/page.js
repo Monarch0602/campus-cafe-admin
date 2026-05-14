@@ -31,6 +31,7 @@ export default function MenuManager() {
         const { data: itemsData } = await supabase
             .from('menu_items')
             .select('*')
+            .not('name', 'ilike', '%(Deleted)%')
             .order('display_order')
 
         const { data: tomorrowData } = await supabase
@@ -143,17 +144,25 @@ export default function MenuManager() {
     }
 
     async function deleteItem(id) {
-        if (!confirm('Delete this item permanently?')) return
+        if (!confirm('Remove this item? It will be hidden from the app but past order records will be preserved.')) return
 
-        // Delete from daily_menu first to avoid FK issues
-        await supabase.from('daily_menu').delete().eq('item_id', id)
+        // Remove from upcoming daily_menu entries
+        await supabase.from('daily_menu').delete().eq('item_id', id).gte('menu_date', getTomorrow())
 
-        const { error } = await supabase.from('menu_items').delete().eq('id', id)
+        // Soft delete: mark as unavailable and tag as deleted
+        const { error } = await supabase
+            .from('menu_items')
+            .update({
+                is_available: false,
+                name: items.find(i => i.id === id)?.name + ' (Deleted)',
+            })
+            .eq('id', id)
+
         if (error) {
             showMessage(`Error: ${error.message}`)
             return
         }
-        showMessage('✓ Item deleted')
+        showMessage('✓ Item removed from menu')
         fetchAll()
     }
 
