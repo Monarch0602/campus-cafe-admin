@@ -21,9 +21,8 @@ export default function MenuManager() {
     const [message, setMessage] = useState('')
     const [form, setForm] = useState({
         name: '', description: '', category: 'thali', price: '',
-        is_veg: true, is_spicy: false, plan_type: 'both'
+        is_veg: true, is_spicy: false, plan_type: 'both', image_url: ''
     })
-
     useEffect(() => { fetchAll() }, [])
 
     async function fetchAll() {
@@ -104,7 +103,7 @@ export default function MenuManager() {
             is_special: false,
         })
 
-        setForm({ name: '', description: '', category: 'thali', price: '', is_veg: true, is_spicy: false, plan_type: 'both' })
+        setForm({ name: '', description: '', category: 'thali', price: '', is_veg: true, is_spicy: false, plan_type: 'both', image_url: '' })
         setShowForm(false)
         showMessage('✓ Item added and available for tomorrow')
         fetchAll()
@@ -205,6 +204,16 @@ export default function MenuManager() {
                             <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" placeholder="What's in it?"
                                 value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
                         </div>
+                        <div className="md:col-span-2">
+                            <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Image URL (optional)</label>
+                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="https://example.com/image.jpg"
+                                value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} />
+                            {form.image_url && (
+                                <img src={form.image_url} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border"
+                                    onError={(e) => e.target.style.display = 'none'} />
+                            )}
+                            <p className="text-xs text-gray-400 mt-1">Tip: Upload your image to <a href="https://imgbb.com" target="_blank" className="text-blue-600 underline">imgbb.com</a> for free, then paste the link here</p>
+                        </div>
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Category</label>
                             <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
@@ -261,8 +270,13 @@ export default function MenuManager() {
                             const onTomorrow = tomorrowMenu.includes(item.id)
                             return (
                                 <div key={item.id} className="px-4 md:px-6 py-4 flex items-center gap-3 md:gap-4 flex-wrap">
-                                    <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center text-xl flex-shrink-0">
-                                        {CAT_EMOJI[item.category] || '🍽️'}
+                                    <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden">
+                                        {item.image_url ? (
+                                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"
+                                                onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = CAT_EMOJI[item.category] || '🍽️' }} />
+                                        ) : (
+                                            <span>{CAT_EMOJI[item.category] || '🍽️'}</span>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
