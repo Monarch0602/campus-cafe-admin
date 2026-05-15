@@ -3,8 +3,13 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import AdminLayout from '../../components/AdminLayout'
 
-const CATEGORIES = ['thali', 'rice', 'roti', 'snacks', 'dessert', 'beverage']
-const CAT_EMOJI = { thali: '🍛', rice: '🍚', roti: '🥙', snacks: '🍟', dessert: '🍰', beverage: '☕' }
+const CATEGORIES = ['breakfast', 'lunch', 'snacks', 'beverage']
+const CAT_EMOJI = { breakfast: '🥐', lunch: '🍱', snacks: '🍟', beverage: '☕' }
+
+const EMPTY_FORM = {
+    name: '', description: '', category: 'breakfast', price: '',
+    is_veg: true, is_spicy: false, plan_type: 'breakfast', image_url: ''
+}
 
 function getTomorrow() {
     const d = new Date()
@@ -17,12 +22,11 @@ export default function MenuManager() {
     const [tomorrowMenu, setTomorrowMenu] = useState([])
     const [loading, setLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
+    const [editingId, setEditingId] = useState(null)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
-    const [form, setForm] = useState({
-        name: '', description: '', category: 'thali', price: '',
-        is_veg: true, is_spicy: false, plan_type: 'both', image_url: ''
-    })
+    const [form, setForm] = useState(EMPTY_FORM)
+
     useEffect(() => { fetchAll() }, [])
 
     async function fetchAll() {
@@ -48,6 +52,29 @@ export default function MenuManager() {
         setTimeout(() => setMessage(''), 3000)
     }
 
+    function startEdit(item) {
+        setEditingId(item.id)
+        setForm({
+            name: item.name || '',
+            description: item.description || '',
+            category: item.category || 'breakfast',
+            price: item.price?.toString() || '',
+            is_veg: item.is_veg ?? true,
+            is_spicy: item.is_spicy ?? false,
+            plan_type: item.plan_type || 'breakfast',
+            image_url: item.image_url || '',
+        })
+        setShowForm(true)
+        // Scroll to top so user sees the form
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    function cancelForm() {
+        setShowForm(false)
+        setEditingId(null)
+        setForm(EMPTY_FORM)
+    }
+
     async function toggleAvailable(id, currentVal) {
         const newVal = !currentVal
         const { error } = await supabase
@@ -60,7 +87,6 @@ export default function MenuManager() {
             return
         }
 
-        // Also remove from daily_menu if hiding it
         if (!newVal) {
             await supabase
                 .from('daily_menu')
@@ -79,33 +105,55 @@ export default function MenuManager() {
             return
         }
         setSaving(true)
-        const { data, error } = await supabase
-            .from('menu_items')
-            .insert({
-                ...form,
-                price: parseFloat(form.price),
-                display_order: items.length + 1,
-                is_available: true,
-            })
-            .select()
-            .single()
 
-        if (error) {
-            showMessage(`Error: ${error.message}`)
-            setSaving(false)
-            return
+        if (editingId) {
+            // EDIT existing item
+            const { error } = await supabase
+                .from('menu_items')
+                .update({
+                    ...form,
+                    price: parseFloat(form.price),
+                })
+                .eq('id', editingId)
+
+            if (error) {
+                showMessage(`Error: ${error.message}`)
+                setSaving(false)
+                return
+            }
+            showMessage('✓ Item updated')
+        } else {
+            // CREATE new item
+            const { data, error } = await supabase
+                .from('menu_items')
+                .insert({
+                    ...form,
+                    price: parseFloat(form.price),
+                    display_order: items.length + 1,
+                    is_available: true,
+                })
+                .select()
+                .single()
+
+            if (error) {
+                showMessage(`Error: ${error.message}`)
+                setSaving(false)
+                return
+            }
+
+            // Auto-add to tomorrow's menu
+            await supabase.from('daily_menu').upsert({
+                menu_date: getTomorrow(),
+                item_id: data.id,
+                is_special: false,
+            })
+
+            showMessage('✓ Item added and available for tomorrow')
         }
 
-        // Auto-add to tomorrow's menu so it appears in app immediately
-        await supabase.from('daily_menu').upsert({
-            menu_date: getTomorrow(),
-            item_id: data.id,
-            is_special: false,
-        })
-
-        setForm({ name: '', description: '', category: 'thali', price: '', is_veg: true, is_spicy: false, plan_type: 'both', image_url: '' })
+        setForm(EMPTY_FORM)
         setShowForm(false)
-        showMessage('✓ Item added and available for tomorrow')
+        setEditingId(null)
         fetchAll()
         setSaving(false)
     }
@@ -145,10 +193,8 @@ export default function MenuManager() {
     async function deleteItem(id) {
         if (!confirm('Remove this item? It will be hidden from the app but past order records will be preserved.')) return
 
-        // Remove from upcoming daily_menu entries
         await supabase.from('daily_menu').delete().eq('item_id', id).gte('menu_date', getTomorrow())
 
-        // Soft delete: mark as unavailable and tag as deleted
         const { error } = await supabase
             .from('menu_items')
             .update({
@@ -172,13 +218,12 @@ export default function MenuManager() {
                     <h1 className="text-2xl font-bold text-gray-900">Menu Manager</h1>
                     <p className="text-gray-500 text-sm mt-1">{items.length} items · {tomorrowMenu.length} on tomorrow's menu</p>
                 </div>
-                <button onClick={() => setShowForm(!showForm)}
+                <button onClick={() => { if (showForm) cancelForm(); else setShowForm(true) }}
                     className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700">
-                    + Add Item
+                    {showForm ? 'Cancel' : '+ Add Item'}
                 </button>
             </div>
 
-            {/* Toast message */}
             {message && (
                 <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
                     {message}
@@ -187,7 +232,9 @@ export default function MenuManager() {
 
             {showForm && (
                 <div className="bg-white rounded-xl border border-gray-100 p-6 mb-6">
-                    <h3 className="font-semibold text-gray-900 mb-4">New Menu Item</h3>
+                    <h3 className="font-semibold text-gray-900 mb-4">
+                        {editingId ? '✏️ Edit Menu Item' : '➕ New Menu Item'}
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Name *</label>
@@ -206,13 +253,13 @@ export default function MenuManager() {
                         </div>
                         <div className="md:col-span-2">
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Image URL (optional)</label>
-                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="https://example.com/image.jpg"
+                            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white" placeholder="https://example.com/image.jpg"
                                 value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} />
                             {form.image_url && (
                                 <img src={form.image_url} alt="Preview" className="mt-2 w-24 h-24 object-cover rounded-lg border"
                                     onError={(e) => e.target.style.display = 'none'} />
                             )}
-                            <p className="text-xs text-gray-400 mt-1">Tip: Upload your image to <a href="https://imgbb.com" target="_blank" className="text-blue-600 underline">imgbb.com</a> for free, then paste the link here</p>
+                            <p className="text-xs text-gray-400 mt-1">Tip: Upload your image to <a href="https://imgbb.com" target="_blank" className="text-blue-600 underline">imgbb.com</a> for free, then paste the direct link here</p>
                         </div>
                         <div>
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Category</label>
@@ -225,9 +272,10 @@ export default function MenuManager() {
                             <label className="text-xs text-gray-500 uppercase tracking-wide block mb-1">Plan Type</label>
                             <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white"
                                 value={form.plan_type} onChange={e => setForm({ ...form, plan_type: e.target.value })}>
-                                <option value="both">Both (Lunch & Snack)</option>
-                                <option value="lunch">Lunch only</option>
-                                <option value="snack">Snack only</option>
+                                <option value="breakfast">Breakfast</option>
+                                <option value="lunch">Lunch</option>
+                                <option value="snack">Snack</option>
+                                <option value="both">All Plans</option>
                             </select>
                         </div>
                         <div className="flex gap-6 items-center pt-2">
@@ -248,9 +296,9 @@ export default function MenuManager() {
                     <div className="flex gap-3 mt-4">
                         <button onClick={saveItem} disabled={saving}
                             className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50">
-                            {saving ? 'Saving...' : 'Save & Add to Tomorrow'}
+                            {saving ? 'Saving...' : (editingId ? 'Update Item' : 'Save & Add to Tomorrow')}
                         </button>
-                        <button onClick={() => setShowForm(false)}
+                        <button onClick={cancelForm}
                             className="border border-gray-200 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                             Cancel
                         </button>
@@ -273,7 +321,7 @@ export default function MenuManager() {
                                     <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden">
                                         {item.image_url ? (
                                             <img src={item.image_url} alt={item.name} className="w-full h-full object-cover"
-                                                onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = CAT_EMOJI[item.category] || '🍽️' }} />
+                                                onError={(e) => { e.target.style.display = 'none' }} />
                                         ) : (
                                             <span>{CAT_EMOJI[item.category] || '🍽️'}</span>
                                         )}
@@ -290,7 +338,12 @@ export default function MenuManager() {
                                     </div>
                                     <div className="text-sm font-bold text-orange-600 flex-shrink-0">₹{item.price}</div>
 
-                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                                        <button onClick={() => startEdit(item)}
+                                            className="text-xs text-blue-600 hover:text-blue-700 border border-blue-200 bg-blue-50 px-2 py-1 rounded whitespace-nowrap">
+                                            ✏️ Edit
+                                        </button>
+
                                         {onTomorrow ? (
                                             <button onClick={() => removeFromTomorrow(item.id)}
                                                 className="text-xs text-red-600 hover:text-red-700 border border-red-200 px-2 py-1 rounded whitespace-nowrap">
