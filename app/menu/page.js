@@ -39,11 +39,11 @@ export default function MenuManager() {
 
         const { data: tomorrowData } = await supabase
             .from('daily_menu')
-            .select('item_id')
+            .select('item_id, is_special')
             .eq('menu_date', getTomorrow())
 
         if (itemsData) setItems(itemsData)
-        if (tomorrowData) setTomorrowMenu(tomorrowData.map(d => d.item_id))
+        if (tomorrowData) setTomorrowMenu(tomorrowData)
         setLoading(false)
     }
 
@@ -65,7 +65,6 @@ export default function MenuManager() {
             image_url: item.image_url || '',
         })
         setShowForm(true)
-        // Scroll to top so user sees the form
         window.scrollTo({ top: 0, behavior: 'smooth' })
     }
 
@@ -107,7 +106,6 @@ export default function MenuManager() {
         setSaving(true)
 
         if (editingId) {
-            // EDIT existing item
             const { error } = await supabase
                 .from('menu_items')
                 .update({
@@ -123,7 +121,6 @@ export default function MenuManager() {
             }
             showMessage('✓ Item updated')
         } else {
-            // CREATE new item
             const { data, error } = await supabase
                 .from('menu_items')
                 .insert({
@@ -141,7 +138,6 @@ export default function MenuManager() {
                 return
             }
 
-            // Auto-add to tomorrow's menu
             await supabase.from('daily_menu').upsert({
                 menu_date: getTomorrow(),
                 item_id: data.id,
@@ -187,6 +183,35 @@ export default function MenuManager() {
             return
         }
         showMessage("✓ Removed from tomorrow's menu")
+        fetchAll()
+    }
+
+    async function toggleSpecial(itemId) {
+        const current = tomorrowMenu.find(t => t.item_id === itemId)
+        if (!current) {
+            showMessage('Add item to tomorrow first')
+            return
+        }
+
+        // If marking this as special, remove special flag from all others first
+        if (!current.is_special) {
+            await supabase
+                .from('daily_menu')
+                .update({ is_special: false })
+                .eq('menu_date', getTomorrow())
+        }
+
+        const { error } = await supabase
+            .from('daily_menu')
+            .update({ is_special: !current.is_special })
+            .eq('menu_date', getTomorrow())
+            .eq('item_id', itemId)
+
+        if (error) {
+            showMessage(`Error: ${error.message}`)
+            return
+        }
+        showMessage(current.is_special ? '✓ Special removed' : "⭐ Set as tomorrow's special")
         fetchAll()
     }
 
@@ -315,7 +340,10 @@ export default function MenuManager() {
                 ) : (
                     <div className="divide-y divide-gray-50">
                         {items.map(item => {
-                            const onTomorrow = tomorrowMenu.includes(item.id)
+                            const tomorrowEntry = tomorrowMenu.find(t => t.item_id === item.id)
+                            const onTomorrow = !!tomorrowEntry
+                            const isSpecial = tomorrowEntry?.is_special
+
                             return (
                                 <div key={item.id} className="px-4 md:px-6 py-4 flex items-center gap-3 md:gap-4 flex-wrap">
                                     <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center text-xl flex-shrink-0 overflow-hidden">
@@ -332,6 +360,7 @@ export default function MenuManager() {
                                             {item.is_veg && <span className="text-xs bg-green-50 text-green-700 px-1.5 py-0.5 rounded">Veg</span>}
                                             {item.is_spicy && <span className="text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">Spicy</span>}
                                             {onTomorrow && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold">📅 Tomorrow</span>}
+                                            {isSpecial && <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">⭐ Special</span>}
                                             {!item.is_available && <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Hidden</span>}
                                         </div>
                                         <div className="text-xs text-gray-400 mt-0.5 truncate">{item.description}</div>
@@ -353,6 +382,16 @@ export default function MenuManager() {
                                             <button onClick={() => addToTomorrowMenu(item.id)}
                                                 className="text-xs text-blue-600 hover:underline border border-blue-200 px-2 py-1 rounded whitespace-nowrap">
                                                 + Tomorrow
+                                            </button>
+                                        )}
+
+                                        {onTomorrow && (
+                                            <button onClick={() => toggleSpecial(item.id)}
+                                                className={`text-xs px-2 py-1 rounded whitespace-nowrap font-medium border
+                          ${isSpecial
+                                                        ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-yellow-50'}`}>
+                                                {isSpecial ? '⭐ Special' : '☆ Make Special'}
                                             </button>
                                         )}
 
