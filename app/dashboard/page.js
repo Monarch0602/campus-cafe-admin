@@ -81,12 +81,23 @@ export default function Dashboard() {
     }
 
     async function updateStatus(id, status) {
-        // Get the order to know who to notify
         const order = orders.find(o => o.id === id)
+
+        // Update UI INSTANTLY
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
+        // Update stats instantly too
+        setStats(prev => {
+            const updated = orders.map(o => o.id === id ? { ...o, status } : o)
+            return {
+                total: updated.length,
+                revenue: updated.reduce((s, o) => s + Number(o.total_amount), 0),
+                pending: updated.filter(o => ['pending', 'confirmed', 'preparing'].includes(o.status)).length,
+                collected: updated.filter(o => o.status === 'delivered').length,
+            }
+        })
 
         await supabase.from('orders').update({ status }).eq('id', id)
 
-        // Send notification to user based on new status
         if (order?.user_id) {
             const shortId = id.slice(0, 8).toUpperCase()
             const messages = {
@@ -125,6 +136,7 @@ export default function Dashboard() {
             }
         }
 
+        // Background refetch to stay in sync
         fetchData()
     }
 
@@ -222,7 +234,7 @@ export default function Dashboard() {
                                                 </span>
                                             </div>
 
-                                            <div className="text-sm font-semibold text-gray-900 mb-1">
+                                            <div className="text-sm font-semibold mb-1" style={{ color: '#1A1A18' }}>
                                                 {order.role === 'parent' && order.childInfo?.full_name
                                                     ? <>👤 {order.childInfo.full_name}</>
                                                     : <>👤 {order.profiles?.full_name || 'User'}</>
@@ -230,14 +242,14 @@ export default function Dashboard() {
                                             </div>
 
                                             {order.role === 'parent' && order.childInfo && (
-                                                <div className="flex items-center gap-3 text-xs text-gray-600 mb-2 flex-wrap">
+                                                <div className="flex items-center gap-3 text-xs mb-2 flex-wrap" style={{ color: '#5C5C58' }}>
                                                     {order.childInfo.class && <span>🏫 {order.childInfo.class}</span>}
                                                     {rollNumber && <span>🔢 Roll: {rollNumber}</span>}
                                                     {board && <span>📚 {board}</span>}
                                                 </div>
                                             )}
 
-                                            <div className="text-sm text-gray-700 mb-1">
+                                            <div className="text-sm mb-1" style={{ color: '#1A1A18' }}>
                                                 {order.order_items?.map(i => `${i.menu_items?.name} ×${i.quantity}`).join(' · ')}
                                             </div>
                                             <div className="text-xs text-gray-400">
@@ -269,17 +281,17 @@ export default function Dashboard() {
                                             </div>
                                             {order.role === 'parent' && order.childInfo ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student</div><div className="text-sm font-medium">{order.childInfo.full_name}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class</div><div className="text-sm font-medium">{order.childInfo.class || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div><div className="text-sm font-medium">{rollNumber || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Board</div><div className="text-sm font-medium">{board || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Phone</div><div className="text-sm font-medium">{order.profiles?.phone || 'Not available'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div><div className="text-sm font-medium">{order.profiles?.full_name || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.childInfo.full_name}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.childInfo.class || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{rollNumber || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Board</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{board || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Phone</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.phone || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.full_name || 'Not available'}</div></div>
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium">{order.profiles?.full_name || 'N/A'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium">{order.profiles?.phone || 'N/A'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.full_name || 'N/A'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.phone || 'N/A'}</div></div>
                                                 </div>
                                             )}
                                             <div className="mt-3 pt-3 border-t border-blue-200">

@@ -40,7 +40,6 @@ export default function Orders() {
 
         const userIds = [...new Set(ordersData.map(o => o.user_id).filter(Boolean))]
 
-        // Run profiles and children queries in parallel
         const [profilesResult, childrenResult] = await Promise.all([
             supabase.from('profiles').select('id, full_name, phone, role').in('id', userIds),
             supabase.from('children').select('*').in('parent_id', userIds),
@@ -68,8 +67,10 @@ export default function Orders() {
     }
 
     async function updateStatus(id, status) {
-        // Get the order to know who to notify
         const order = orders.find(o => o.id === id)
+
+        // Update UI INSTANTLY before waiting for database
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
 
         await supabase.from('orders').update({ status }).eq('id', id)
 
@@ -112,7 +113,8 @@ export default function Orders() {
             }
         }
 
-        fetchData()
+        // Refetch in background to stay in sync
+        fetchOrders()
     }
 
     let filtered = orders
@@ -194,7 +196,7 @@ export default function Orders() {
                                                 </span>
                                             </div>
 
-                                            <div className="text-sm font-semibold text-gray-900 mb-1">
+                                            <div className="text-sm font-semibold mb-1" style={{ color: '#1A1A18' }}>
                                                 {order.role === 'parent' && order.childInfo?.full_name
                                                     ? <span>👤 {order.childInfo.full_name} <span className="text-gray-400 font-normal">(ordered by {order.profiles?.full_name || 'Parent'})</span></span>
                                                     : <span>👤 {order.profiles?.full_name || 'User'}</span>
@@ -202,14 +204,14 @@ export default function Orders() {
                                             </div>
 
                                             {order.role === 'parent' && order.childInfo && (
-                                                <div className="flex items-center gap-3 text-xs text-gray-600 mb-2 flex-wrap">
+                                                <div className="flex items-center gap-3 text-xs mb-2 flex-wrap" style={{ color: '#5C5C58' }}>
                                                     {order.childInfo.class && <span>🏫 {order.childInfo.class}</span>}
                                                     {rollNumber && <span>🔢 Roll: {rollNumber}</span>}
                                                     {board && <span>📚 {board}</span>}
                                                 </div>
                                             )}
 
-                                            <div className="text-sm text-gray-700 mb-1">
+                                            <div className="text-sm mb-1" style={{ color: '#1A1A18' }}>
                                                 {order.order_items?.map(i => `${i.menu_items?.name} ×${i.quantity}`).join(' · ')}
                                             </div>
                                             <div className="text-xs text-gray-400">
@@ -248,18 +250,18 @@ export default function Orders() {
                                             </div>
                                             {order.role === 'parent' && order.childInfo ? (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student Name</div><div className="text-sm font-medium text-gray-900">{order.childInfo.full_name}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class / Grade</div><div className="text-sm font-medium text-gray-900">{order.childInfo.class || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div><div className="text-sm font-medium text-gray-900">{rollNumber || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Education Board</div><div className="text-sm font-medium text-gray-900">{board || 'Not set'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Contact</div><div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div><div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Student Name</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.childInfo.full_name}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Class / Grade</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.childInfo.class || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Roll Number</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{rollNumber || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Education Board</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{board || 'Not set'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Contact</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.phone || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Parent Name</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.full_name || 'Not available'}</div></div>
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium text-gray-900">{order.profiles?.full_name || 'Not available'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium text-gray-900">{order.profiles?.phone || 'Not available'}</div></div>
-                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Role</div><div className="text-sm font-medium text-gray-900 capitalize">{order.role}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Name</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.full_name || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Phone</div><div className="text-sm font-medium" style={{ color: '#1A1A18' }}>{order.profiles?.phone || 'Not available'}</div></div>
+                                                    <div><div className="text-xs text-blue-600 uppercase tracking-wide mb-1">Role</div><div className="text-sm font-medium capitalize" style={{ color: '#1A1A18' }}>{order.role}</div></div>
                                                 </div>
                                             )}
                                             <div className="mt-3 pt-3 border-t border-blue-200">
